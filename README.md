@@ -5,6 +5,10 @@
 原生 **HTML / CSS / JavaScript** 实现的计算器界面，零第三方依赖、零构建步骤，
 通过 `fetch` 调用后端 REST API 完成计算与历史记录管理。
 
+> **前后端分离**：本仓库只负责界面与交互，**不做任何数学计算**。
+> 用户输入的表达式原样发给后端，计算结果与历史记录全部来自后端 API。
+> 验证方法：关闭后端服务后，本前端仍可操作界面，但**无法算出任何新结果**。
+
 ## 技术栈
 
 | 层 | 技术 |
@@ -12,38 +16,149 @@
 | 结构 | HTML5（语义化标签 + ARIA 无障碍属性） |
 | 样式 | CSS3（CSS 变量主题、Grid 布局、响应式断点） |
 | 逻辑 | 原生 JavaScript（ES5 语法、IIFE 封装、无框架） |
-| 通信 | Fetch API + Promise |
+| 通信 | Fetch API + Promise，HTTP + JSON |
+
+## 运行环境
+
+| 项 | 要求 |
+| ---- | ---- |
+| 浏览器 | Chrome / Edge / Firefox / Safari 任一现代浏览器 |
+| 后端 | 需先启动后端服务（见后端仓库 README），默认 `http://localhost:8080` |
+| 本地静态服务（可选） | Python 3（用 `python -m http.server`）或 VS Code Live Server 插件 |
+
+本前端**不需要** Node.js、不需要 npm install、不需要打包构建。
 
 ## 文件结构
 
 ```
 ├── index.html    页面结构：计算区 / 历史区 / 提示条
 ├── style.css     样式：主题变量、响应式布局、按键面板
-└── app.js        逻辑：API 调用、历史渲染、虚拟键盘、表单交互
+├── app.js        逻辑：API 调用、历史渲染、虚拟键盘、表单交互
+├── README.md     本文件
+└── codestyle.md  代码规范文档
 ```
 
-## 运行方式
+## 安装与启动
 
-**前置条件**：后端已在 `http://localhost:8080` 启动。
+### 1. 启动后端
 
-方式一（推荐，独立部署）：
+先按**后端仓库的 README** 启动后端，确认 `http://localhost:8080` 可以访问。
+
+### 2. 启动前端
+
+三种方式任选其一：
+
+**方式一（推荐，独立部署）**
 
 ```bash
 python -m http.server 5500
 # 浏览器访问 http://localhost:5500
 ```
 
-方式二：用 VS Code 的 **Live Server** 插件打开 `index.html`。
+**方式二**：用 VS Code 的 **Live Server** 插件，右键 `index.html` → Open with Live Server。
 
-方式三：直接双击 `index.html`（需允许浏览器跨域访问 localhost）。
+**方式三**：直接双击 `index.html` 用浏览器打开（file:// 协议下也能工作）。
 
-> 后端地址在 `app.js` 顶部的 `API_BASE` 变量中配置。默认逻辑：
-> 页面由后端 8080 端口提供时走同源相对路径，否则指向 `http://localhost:8080`。
-> 后端 `WebConfig` 已放开 `/api/**` 的 CORS，跨端口访问开箱即用。
+> ⚠️ 方式一/二/三都属于"前端与后端不同源"，此时必须保证 `app.js` 里的 `API_BASE` 指向后端地址。
+
+## 配置说明
+
+前端唯一的配置项是 **后端 API 地址**，位于 `app.js` 顶部：
+
+```javascript
+// 后端地址：由 Spring Boot(8080) 提供页面时留空走同源；独立部署时指向本机后端
+var API_BASE = (location.protocol === "http:" || location.protocol === "https:")
+    ? (location.port === "8080" ? "" : "http://localhost:8080")
+    : "http://localhost:8080";
+```
+
+| 场景 | `API_BASE` 取值 | 说明 |
+| ---- | ---- | ---- |
+| 由后端 `static/` 提供页面（同源 8080） | `""` | 走相对路径 `/api/...` |
+| 本地用 Live Server / http.server 打开 | `http://localhost:8080` | 默认逻辑自动判断 |
+| 前端已部署到公网，调用公网后端 | `https://你的后端域名` | **部署时需手动改成这个** |
+
+**修改方法**：直接编辑 `app.js` 第 15 行附近的 `API_BASE` 表达式，或简单粗暴地改成：
+
+```javascript
+var API_BASE = "https://你的后端公网地址";
+```
+
+## 数据库初始化
+
+**本前端不直接访问数据库，也没有任何本地数据存储**（不使用 LocalStorage、不使用 IndexedDB、不使用内存缓存）。
+
+所有历史记录都保存在**后端的 H2 数据库**中，前端每次渲染历史列表都会重新请求
+`GET /api/calculations`。因此：
+
+- 数据库初始化方法请见**后端仓库 README** 的「数据库初始化」章节
+- 只要后端数据库正常，刷新页面、关闭再打开前端、甚至换一台设备，历史记录都不会丢失
+
+## 前后端对接方式
+
+```
+本前端（index.html + app.js）
+      │  fetch  HTTP + JSON
+      ▼
+后端 REST API  http://localhost:8080/api/calculations
+      │
+      ▼
+H2 数据库
+```
+
+### 调用的接口
+
+| 前端动作 | 方法 | 路径 | 请求体 |
+| ---- | ---- | ---- | ---- |
+| 点击"计算" | POST | `/api/calculations` | `{"expression":"(1+2)*3"}` |
+| 加载历史列表 | GET | `/api/calculations?page=0&size=10` | — |
+| 删除单条记录 | DELETE | `/api/calculations/{id}` | — |
+| 清空全部历史 | DELETE | `/api/calculations` | — |
+
+### 请求 / 响应示例
+
+请求：
+
+```json
+{ "expression": "10 / (2 + 3)" }
+```
+
+成功响应（HTTP 201）：
+
+```json
+{
+  "id": 1,
+  "expression": "10 / (2 + 3)",
+  "result": 2.0,
+  "calculatedAt": "2026-10-03T14:30:00",
+  "success": true,
+  "errorMessage": null
+}
+```
+
+错误响应（HTTP 400）：
+
+```json
+{
+  "timestamp": "2026-10-03T14:30:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "除数不能为零",
+  "path": "/api/calculations"
+}
+```
+
+前端读取 `message` 字段，展示在错误提示框中。
+
+### 跨域说明
+
+后端 `WebConfig.java` 已对 `/api/**` 放开 CORS（`allowedOriginPatterns("*")`），
+因此本前端**无论部署在哪个域名或端口**，都能直接调用后端接口，无需额外配置代理。
 
 ## 功能
 
-- **计算**：四则运算、取模、括号、小数、负数，支持运算优先级
+- **计算**：四则运算、取模、括号、小数、负数，支持运算优先级与一元正负号
+  （计算结果**全部由后端产生**）
 - **输入**：虚拟按键面板（含 C 清空、⌫ 退格）+ 键盘输入，回车即算
 - **历史**：分页浏览（每页 10 条）、点击回填表达式、单条删除、全部清空
 - **反馈**：成功显示结果卡片，失败显示统一错误提示，操作结果用 Toast 提示
@@ -57,6 +172,43 @@ python -m http.server 5500
 | 右侧历史区 | 记录条数统计、上一页/下一页、清空全部、历史列表（含成功/失败状态标记） |
 | 底部 | Toast 提示条（4 秒自动消失） |
 
-## 关联仓库
+## 部署
 
-后端仓库：`24124907-calculator-backend`
+评测期间前端部署地址：`<部署后填写，例如 https://your-frontend.vercel.app>`
+
+推荐部署方式（静态托管，均为免费）：
+
+| 平台 | 步骤 |
+| ---- | ---- |
+| **Vercel** | 导入本仓库 → Framework 选 `Other` → Build Command 留空 → Output Directory 填 `.` → Deploy |
+| **Netlify** | 拖拽整个文件夹到 Netlify Drop，或连接仓库后 Publish directory 填 `.` |
+| **Cloudflare Pages** | 连接仓库 → 构建命令留空 → 输出目录 `.` |
+| **GitHub Pages** | 仓库 Settings → Pages → Source 选 `main` 分支根目录 |
+
+**部署后必做**：把 `app.js` 的 `API_BASE` 改成后端公网地址并重新提交，
+否则前端会去请求 `localhost:8080`（在访问者电脑上是不存在的）。
+
+## 交付物
+
+| 文件 | 说明 |
+| ---- | ---- |
+| `index.html` | 页面结构 |
+| `style.css` | 样式 |
+| `app.js` | 交互逻辑与 API 调用 |
+| `README.md` | 本文件：项目简介、技术栈、运行环境、安装启动、配置说明、前后端对接 |
+| `codestyle.md` | 代码规范文档（基于 Google JavaScript Style Guide） |
+
+## 关联仓库与规范文档
+
+| 项目 | 地址 |
+| ---- | ---- |
+| 前端仓库 | `24124907-calculator-frontend`（本仓库） |
+| 后端仓库 | `24124907-calculator-backend` |
+| 前端代码规范 | 本仓库中的 [codestyle.md](codestyle.md) |
+| 后端代码规范 | `24124907-calculator-backend` 仓库中的 `codestyle.md` |
+
+## 代码规范
+
+本项目遵循 **[Google JavaScript Style Guide](https://google.github.io/styleguide/jsguide.html)**，
+HTML / CSS 部分参考 [Google HTML/CSS Style Guide](https://google.github.io/styleguide/htmlcssguide.html)，
+详见 [codestyle.md](codestyle.md)。
