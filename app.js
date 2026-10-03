@@ -12,9 +12,13 @@
   "use strict";
 
   // ===== 后端地址配置 =====
-  var API_BASE = (location.protocol === "http:" || location.protocol === "https:")
-      ? (location.port === "8080" ? "" : "http://localhost:8080")
-      : "http://localhost:8080";
+  // 优先使用 config.js 中配置的 window.API_BASE（部署时只改那一个文件即可）；
+  // 未配置时按当前运行场景自动判断。
+  var API_BASE = (typeof window.API_BASE === "string" && window.API_BASE !== "")
+      ? window.API_BASE
+      : (location.protocol === "http:" || location.protocol === "https:")
+          ? (location.port === "8080" ? "" : "http://localhost:8080")
+          : "http://localhost:8080";
 
   var $ = function (sel) { return document.querySelector(sel); };
   var expressionInput = $("#expression");

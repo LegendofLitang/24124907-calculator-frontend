@@ -33,6 +33,7 @@
 ```
 ├── index.html    页面结构：计算区 / 历史区 / 提示条
 ├── style.css     样式：主题变量、响应式布局、按键面板
+├── config.js     部署配置：后端 API 地址（唯一需要改的配置文件）
 ├── app.js        逻辑：API 调用、历史渲染、虚拟键盘、表单交互
 ├── README.md     本文件
 └── codestyle.md  代码规范文档
@@ -59,30 +60,36 @@ python -m http.server 5500
 
 **方式三**：直接双击 `index.html` 用浏览器打开（file:// 协议下也能工作）。
 
-> ⚠️ 方式一/二/三都属于"前端与后端不同源"，此时必须保证 `app.js` 里的 `API_BASE` 指向后端地址。
+> ⚠️ 方式一/二/三都属于"前端与后端不同源"，此时必须保证后端地址配置正确（见下节）。
 
 ## 配置说明
 
-前端唯一的配置项是 **后端 API 地址**，位于 `app.js` 顶部：
+前端**唯一的配置项**是后端 API 地址，集中在 **`config.js`** 一个文件里：
 
 ```javascript
-// 后端地址：由 Spring Boot(8080) 提供页面时留空走同源；独立部署时指向本机后端
-var API_BASE = (location.protocol === "http:" || location.protocol === "https:")
-    ? (location.port === "8080" ? "" : "http://localhost:8080")
-    : "http://localhost:8080";
+// config.js
+window.API_BASE = "";     // 留空 = 自动判断；填地址 = 使用该地址
 ```
 
-| 场景 | `API_BASE` 取值 | 说明 |
+`config.js` 在 `index.html` 中先于 `app.js` 加载，`app.js` 据此决定请求地址。
+
+| 场景 | `config.js` 中填什么 | 说明 |
 | ---- | ---- | ---- |
-| 由后端 `static/` 提供页面（同源 8080） | `""` | 走相对路径 `/api/...` |
-| 本地用 Live Server / http.server 打开 | `http://localhost:8080` | 默认逻辑自动判断 |
-| 前端已部署到公网，调用公网后端 | `https://你的后端域名` | **部署时需手动改成这个** |
+| 由后端 `static/` 提供页面（同源 8080） | 留空 `""` | 走相对路径 `/api/...` |
+| 本地用 Live Server / http.server 打开 | 留空 `""` | 自动回退到 `http://localhost:8080` |
+| **前端独立部署到公网** | `"http://你的后端公网地址:8080"` | **部署时必须填这个** |
 
-**修改方法**：直接编辑 `app.js` 第 15 行附近的 `API_BASE` 表达式，或简单粗暴地改成：
+**部署时的修改方法**（只改这一行）：
 
 ```javascript
-var API_BASE = "https://你的后端公网地址";
+// config.js
+window.API_BASE = "http://1.2.3.4:8080";
 ```
+
+改完提交推送，托管平台会自动重新部署。
+
+> 未配置 `window.API_BASE` 时，`app.js` 内置的自动判断逻辑为：
+> 页面由后端 8080 端口提供 → 同源相对路径；否则 → `http://localhost:8080`。
 
 ## 数据库初始化
 
@@ -194,6 +201,7 @@ H2 数据库
 | ---- | ---- |
 | `index.html` | 页面结构 |
 | `style.css` | 样式 |
+| `config.js` | 部署配置（后端 API 地址） |
 | `app.js` | 交互逻辑与 API 调用 |
 | `README.md` | 本文件：项目简介、技术栈、运行环境、安装启动、配置说明、前后端对接 |
 | `codestyle.md` | 代码规范文档（基于 Google JavaScript Style Guide） |
